@@ -58,16 +58,19 @@ namespace ProjetoGrafo
             if (verticeOrigem != null && verticeDestino != null)
                 InserirAresta(verticeOrigem, verticeDestino);
         }
-        public void CriarMultiplosVertices(int quantidade)
+        public void CriarMultiplosVertices(int quantidade, int offset)
         {
             for (int indice = 1; indice <= quantidade; indice++)
-                InserirVertice("Vertice" + indice);
+            {
+                InserirVertice("Vertice" + (indice + offset));
+            }
         }
+
         public void CriarArestaPorIndice(int indiceOrigem, int indiceDestino)
         {
             AdicionarAresta("Vertice" + indiceOrigem, "Vertice" + indiceDestino);
         }
-        public void LerArquivo(string caminhoArquivo = "")
+        public void LerArquivo(string caminhoArquivo = "", bool reset = true)
         {
             if (string.IsNullOrEmpty(caminhoArquivo))
             {
@@ -84,7 +87,17 @@ namespace ProjetoGrafo
                     return;
                 }
             }
-            listaVertices.Clear();
+
+            int offset = 0;
+            if (reset)
+            {
+                listaVertices.Clear();
+            }
+            else
+            {
+                offset = listaVertices.Count;
+            }
+
             try
             {
                 using (StreamReader leitorArquivo = new StreamReader(caminhoArquivo))
@@ -95,7 +108,8 @@ namespace ProjetoGrafo
                     {
                         if (primeiraLinha)
                         {
-                            CriarMultiplosVertices(Convert.ToInt32(linha));
+                            int quantidadeVerticesArquivo = Convert.ToInt32(linha);
+                            CriarMultiplosVertices(quantidadeVerticesArquivo, offset);
                             primeiraLinha = false;
                         }
                         else
@@ -103,7 +117,7 @@ namespace ProjetoGrafo
                             string[] partes = linha.Split(' ');
                             int origem = Convert.ToInt32(partes[0]);
                             int destino = Convert.ToInt32(partes[1]);
-                            CriarArestaPorIndice(origem, destino);
+                            CriarArestaPorIndice(origem + offset, destino + offset);
                         }
                     }
                 }
@@ -113,6 +127,7 @@ namespace ProjetoGrafo
                 MessageBox.Show("Erro ao ler o arquivo: " + erro.Message);
             }
         }
+
         public string RemoverVertice(Vertice vertice)
         {
             string nomeRemovido = vertice.Nome;
@@ -257,6 +272,13 @@ namespace ProjetoGrafo
             this.MouseMove += PainelGrafo_MouseMove;
             this.MouseUp += PainelGrafo_MouseUp;
         }
+        public void ResetView()
+        {
+            zoomAtual = 1.0f;
+            deslocamentoPan = new PointF(0, 0);
+            Invalidate();
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -269,6 +291,7 @@ namespace ProjetoGrafo
             int margem = 10;
             foreach (Vertice vertice in grafo.Vertices)
             {
+                // Calculo do Diâmetro para Cada Vértice
                 SizeF tamanhoTexto = grafico.MeasureString(vertice.Nome, fonteRotulo);
                 float diametroCalculado = Math.Max(tamanhoTexto.Width, tamanhoTexto.Height) + margem;
                 mapaDiametroVertices[vertice] = diametroCalculado;
@@ -281,10 +304,12 @@ namespace ProjetoGrafo
             else if (totalVertices > 1)
             {
                 float espacamentoExtra = 20;
+                // formula geometrica de um polígono regular inscrito em um circulo
                 float raioCirculo = (diametroMaximo + espacamentoExtra) / (2 * (float)Math.Sin(Math.PI / totalVertices));
                 PointF centroVirtual = new PointF(ClientSize.Width / (2 * zoomAtual), ClientSize.Height / (2 * zoomAtual));
                 for (int i = 0; i < totalVertices; i++)
                 {
+                    // Distribuição Angular
                     float angulo = 2 * (float)Math.PI * i / totalVertices;
                     float x = centroVirtual.X + raioCirculo * (float)Math.Cos(angulo);
                     float y = centroVirtual.Y + raioCirculo * (float)Math.Sin(angulo);
@@ -306,6 +331,7 @@ namespace ProjetoGrafo
             {
                 if (posicaoVertices.ContainsKey(vertice))
                 {
+                    // Calculo para Desenhar Cada Vertice
                     PointF centro = posicaoVertices[vertice];
                     float diametro = mapaDiametroVertices[vertice];
                     float raio = diametro / 2;
@@ -359,8 +385,12 @@ namespace ProjetoGrafo
         public ComboBox cmbDestino { get; private set; }
         private Button btnOk;
         private Button btnCancelar;
+        private List<Vertice> listaVertices;
+
         public FormInserirAresta(List<Vertice> listaVertices)
         {
+            this.listaVertices = listaVertices;
+
             Text = "Inserir Aresta";
             Width = 320;
             Height = 180;
@@ -369,9 +399,10 @@ namespace ProjetoGrafo
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
+
             Label lblOrigem = new Label
             {
-                Text = "Vertice de Origem:",
+                Text = "Vértice de Origem:",
                 Left = 10,
                 Top = 20,
                 AutoSize = true
@@ -383,9 +414,10 @@ namespace ProjetoGrafo
                 Width = 140,
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
+
             Label lblDestino = new Label
             {
-                Text = "Vertice de Destino:",
+                Text = "Vértice de Destino:",
                 Left = 10,
                 Top = 60,
                 AutoSize = true
@@ -397,15 +429,19 @@ namespace ProjetoGrafo
                 Width = 140,
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
+
             foreach (var vertice in listaVertices)
             {
                 cmbOrigem.Items.Add(vertice);
-                cmbDestino.Items.Add(vertice);
             }
             if (cmbOrigem.Items.Count > 0)
+            {
                 cmbOrigem.SelectedIndex = 0;
-            if (cmbDestino.Items.Count > 0)
-                cmbDestino.SelectedIndex = 0;
+            }
+            cmbOrigem.SelectedIndexChanged += cmbOrigem_SelectedIndexChanged;
+
+            AtualizarDestino();
+
             btnOk = new Button
             {
                 Text = "OK",
@@ -424,12 +460,33 @@ namespace ProjetoGrafo
             };
             this.AcceptButton = btnOk;
             this.CancelButton = btnCancelar;
+
             Controls.Add(lblOrigem);
             Controls.Add(cmbOrigem);
             Controls.Add(lblDestino);
             Controls.Add(cmbDestino);
             Controls.Add(btnOk);
             Controls.Add(btnCancelar);
+        }
+
+        private void cmbOrigem_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            AtualizarDestino();
+        }
+
+        private void AtualizarDestino()
+        {
+            cmbDestino.Items.Clear();
+            Vertice verticeSelecionado = cmbOrigem.SelectedItem as Vertice;
+            foreach (var vertice in listaVertices)
+            {
+                if (!vertice.Equals(verticeSelecionado))
+                {
+                    cmbDestino.Items.Add(vertice);
+                }
+            }
+            if (cmbDestino.Items.Count > 0)
+                cmbDestino.SelectedIndex = 0;
         }
     }
     public class FormAlterarVertice : Form
@@ -823,18 +880,49 @@ namespace ProjetoGrafo
         }
         private void BtnLerArquivo_Click(object sender, EventArgs e)
         {
-            grafo.LerArquivo();
+            DialogResult acao = MessageBox.Show(
+                "Deseja sobrescrever o grafo atual ou adicionar os dados do novo arquivo?\n" +
+                "Clique 'Sim' para sobrescrever e 'Não' para adicionar.",
+                "Selecione a Ação",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1);
+
+            if (acao == DialogResult.Cancel)
+            {
+                return;
+            }
+            else if (acao == DialogResult.Yes)
+            {
+                grafo.LerArquivo(reset: true);
+            }
+            else if (acao == DialogResult.No)
+            {
+                grafo.LerArquivo(reset: false);
+            }
+
             AtualizarAdjacencia();
             painelGrafo.Invalidate();
         }
+
+
+
         private void BtnInserirVertice_Click(object sender, EventArgs e)
         {
-            string nomeVertice = Interaction.InputBox("Digite o nome do vertice:", "Inserir Vertice", "Vertice");
+            string nomeVertice = Interaction.InputBox("Digite o nome do vértice:", "Inserir Vértice", "Vertice");
             if (!string.IsNullOrEmpty(nomeVertice))
+            {
+                if (grafo.Vertices.Any(v => v.Nome.Equals(nomeVertice, StringComparison.OrdinalIgnoreCase)))
+                {
+                    MessageBox.Show("Já existe um vértice com esse nome.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
                 grafo.InserirVertice(nomeVertice);
+            }
             AtualizarAdjacencia();
             painelGrafo.Invalidate();
         }
+
         private void BtnInserirAresta_Click(object sender, EventArgs e)
         {
             if (grafo.Vertices.Count < 2)
@@ -863,7 +951,7 @@ namespace ProjetoGrafo
         {
             if (!grafo.Vertices.Any())
             {
-                MessageBox.Show("Nao ha vertices para alterar.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Não há vértices para alterar.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             using (FormAlterarVertice frmAlterar = new FormAlterarVertice(grafo.Vertices.ToList()))
@@ -874,7 +962,13 @@ namespace ProjetoGrafo
                     string novoNome = frmAlterar.txtNovoNome.Text.Trim();
                     if (string.IsNullOrEmpty(novoNome))
                     {
-                        MessageBox.Show("O novo nome nao pode ser vazio.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show("O novo nome não pode ser vazio.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                    if (grafo.Vertices.Any(v => !v.Equals(verticeSelecionado)
+                                               && v.Nome.Equals(novoNome, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        MessageBox.Show("Já existe um vértice com esse nome.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
                     grafo.AlterarVertice(verticeSelecionado, novoNome);
@@ -980,7 +1074,9 @@ namespace ProjetoGrafo
         private void BtnExibirAdjacencia_Click(object sender, EventArgs e)
         {
             AtualizarAdjacencia();
+            painelGrafo.ResetView();
         }
+
         private void AtualizarAdjacencia()
         {
             StringWriter escritor = new StringWriter();
